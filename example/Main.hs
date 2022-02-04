@@ -14,6 +14,14 @@ import Utils (ada, waitSeconds)
 import Address as Addr
 import BotInterface.Types
 import BotInterface.Wallet (BpiWallet)
+import BotPlutusInterface.Contract (runContract)
+import BotPlutusInterface.Types (
+  AppState (AppState),
+  ContractEnvironment (..),
+  ContractState (ContractState, csActivity, csObservableState),
+  PABConfig,
+  SomeContractState (SomeContractState),
+ )
 import LocalCluster.Types (supportDir)
 
 main :: IO ()

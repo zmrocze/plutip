@@ -76,12 +76,12 @@
     };
     plutus = {
       url =
-        "github:input-output-hk/plutus/2721c59fd2302b75c4138456c29fd5b509e8340a";
+        "github:input-output-hk/plutus/c8c5183f7facd967d48fe07b3b14465b8dd48fe7";
       flake = false;
     };
     plutus-apps = {
       url =
-        "github:input-output-hk/plutus-apps/21b592b1ea4bc727c1d486432e8aa8388d9e706c";
+        "github:input-output-hk/plutus-apps/75a581c6eb98d36192ce3d3f86ea60a04bc4a52a";
       flake = false;
     };
     plutus-extra = {
@@ -109,15 +109,13 @@
         "github:input-output-hk/Win32-network/3825d3abf75f83f406c1f7161883c438dac7277d";
       flake = false;
     };
+    bot-plutus-interface = {
+      url =
+        "github:mlabs-haskell/bot-plutus-interface/490e9b6305cebe5644dfe56f05dbc737b07e3fe6";
+    };
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , haskell-nix
-    , iohk-nix
-    , ...
-    }@inputs:
+  outputs = { self, nixpkgs, haskell-nix, iohk-nix, ... }@inputs:
     let
       defaultSystems = [ "x86_64-linux" "x86_64-darwin" ];
 
@@ -125,10 +123,7 @@
 
       nixpkgsFor = system:
         import nixpkgs {
-          overlays = [
-            haskell-nix.overlay
-            iohk-nix.overlays.crypto
-          ];
+          overlays = [ haskell-nix.overlay iohk-nix.overlays.crypto ];
           inherit (haskell-nix) config;
           inherit system;
         };
@@ -138,20 +133,14 @@
           pkgs = nixpkgsFor system;
           plutus = import inputs.plutus { inherit system; };
           src = ./.;
-        in
-        import ./nix/haskell.nix { inherit src inputs pkgs system; };
+        in import ./nix/haskell.nix { inherit src inputs pkgs system; };
 
-    in
-    {
+    in {
       flake = perSystem (system: (projectFor system).flake { });
 
-      defaultPackage = perSystem
-        (system:
-          let
-            lib = "plutip:lib:plutip";
-          in
-          self.flake.${system}.packages.${lib}
-        );
+      defaultPackage = perSystem (system:
+        let lib = "plutip:lib:plutip";
+        in self.flake.${system}.packages.${lib});
 
       packages = perSystem (system: self.flake.${system}.packages);
 
@@ -161,12 +150,10 @@
 
       # This will build all of the project's executables and the tests
       check = perSystem (system:
-        (nixpkgsFor system).runCommand "combined-check"
-          {
-            nativeBuildInputs = builtins.attrValues self.checks.${system}
-              ++ builtins.attrValues self.flake.${system}.packages;
-          } "touch $out"
-      );
+        (nixpkgsFor system).runCommand "combined-check" {
+          nativeBuildInputs = builtins.attrValues self.checks.${system}
+            ++ builtins.attrValues self.flake.${system}.packages;
+        } "touch $out");
 
       # NOTE `nix flake check` will not work at the moment due to use of
       # IFD in haskell.nix
