@@ -85,6 +85,7 @@ import Data.Text qualified as T
 import Data.Text.Class (
   ToText (..),
  )
+import Paths_plutip (getDataFileName)
 import Plutus.ChainIndex.App qualified as ChainIndex
 import Plutus.ChainIndex.Config (ChainIndexConfig (cicNetworkId, cicPort), cicDbPath, cicSocketPath)
 import Plutus.ChainIndex.Config qualified as CI
@@ -162,7 +163,8 @@ withLocalClusterSetup ::
 withLocalClusterSetup action = do
   -- Setting required environment variables
   setEnv "NO_POOLS" "1"
-  setEnv "SHELLEY_TEST_DATA" "cluster-data"
+  clusterDataFolder <- getDataFileName "cluster-data"
+  setEnv "SHELLEY_TEST_DATA" clusterDataFolder
 
   -- Handle SIGTERM properly
   installSignalHandlers (putStrLn "Terminated")
