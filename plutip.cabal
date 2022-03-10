@@ -171,6 +171,7 @@ test-suite plutip-tests
 
   other-modules:
     Spec.Integration
+    Spec.SpendingContract
     Spec.Test.Plutip.BotPlutusInterface
 
   default-extensions:

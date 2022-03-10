@@ -22,6 +22,7 @@ import Test.Plutip.Internal.Types (
 import Test.Plutip.LocalCluster (withCluster)
 import Test.Tasty (TestTree)
 import Text.Printf (printf)
+import Spec.SpendingContract (lockThenSpend)
 
 -- FIXME: something prints node configs polluting test outputs even with maximum log severity
 -- upd: (https://github.com/input-output-hk/cardano-node/blob/4ad6cddd40517c2eb8c3df144a6fa6737952aa92/cardano-node/src/Cardano/Node/Run.hs#L117)
@@ -89,6 +90,7 @@ test =
             (initAda 100)
             pred'
             (withContract $ const getUtxosThrowsEx)
+    , shouldSucceed "Lock then spend" (initAda 100) $ withContract $ const lockThenSpend
     ]
 
 getUtxos :: Contract [Value] EmptySchema Text (Map TxOutRef ChainIndexTxOut)
