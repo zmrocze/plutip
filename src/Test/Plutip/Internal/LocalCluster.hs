@@ -21,9 +21,9 @@ import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Retry (constantDelay, limitRetries, recoverAll)
-import Control.Tracer (Tracer, contramap, traceWith)
+import Control.Tracer (Tracer, traceWith)
 import Data.Kind (Type)
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Text (Text, pack)
 import Data.Text.Class (ToText (toText))
 import Plutus.ChainIndex.App qualified as ChainIndex
@@ -31,26 +31,34 @@ import Plutus.ChainIndex.Config (ChainIndexConfig (cicNetworkId, cicPort), cicDb
 import Plutus.ChainIndex.Config qualified as ChainIndex
 import Plutus.ChainIndex.Logging (defaultConfig)
 import Servant.Client (BaseUrl (BaseUrl), Scheme (Http))
-import System.Directory (copyFile, findExecutable)
+import System.Directory (copyFile, findExecutable, getDirectoryContents)
 import System.Environment (setEnv)
 import System.Exit (die)
-import System.FilePath ((</>))
+import System.FilePath (takeExtension, (</>))
 import Test.Plutip.Internal.BotPlutusInterface.Setup qualified as BotSetup
 import Test.Plutip.Internal.Types (
   ClusterEnv (ClusterEnv, bpiForceBudget, chainIndexUrl, networkId, runningNode, supportDir, tracer),
   RunningNode (RunningNode),
  )
 import Test.Plutip.Tools.CardanoApi qualified as Tools
+import Test.Plutip.Tools.ChainIndex qualified as Tools
 import UnliftIO.Concurrent (forkFinally)
 import UnliftIO.STM (TVar, atomically, newTVarIO, readTVar, retrySTM, writeTVar)
 
+import Control.Exception (SomeException, try)
 import Data.Foldable (for_)
+import Data.Map qualified as Map
 import GHC.Stack.Types (HasCallStack)
+import Ledger (TxOutRef (TxOutRef), toTxOut, ciTxOutDatum, datumHash, TxOut (txOutDatumHash))
+import Ledger.Tx.CardanoAPI (fromCardanoTxId, toCardanoTxOut)
 import Paths_plutip (getDataFileName)
 import Test.Plutip.Config (PlutipConfig (chainIndexPort, clusterDataDir, relayNodeLogs))
 import Test.Plutip.Config qualified as Config
 import Text.Printf (printf)
 import UnliftIO.Exception (catchIO)
+import Control.Monad (forM_)
+import Control.Monad ((>=>))
+import Control.Lens
 
 -- | Starting a cluster with a setup action
 -- We're heavily depending on cardano-wallet local cluster tooling, however they don't allow the
@@ -120,7 +128,87 @@ withPlutusInterface conf action = do
               }
 
       BotSetup.runSetup cEnv -- run preparations to use `bot-plutus-interface`
-      userActon cEnv -- executing user action on cluster
+      res <- userActon cEnv -- executing user action on cluster
+      try @SomeException (debugTxCheck cEnv) >>= print
+      return res
+
+debugTxCheck :: ClusterEnv -> IO ()
+debugTxCheck cEnv = do
+  let dir = BotSetup.txsDir cEnv
+  signedTxFiles <- findSignedTxs dir
+  putStrLn $ BotSetup.txsDir cEnv
+  putStrLn $ "Signed txs" <> show signedTxFiles
+
+  let absSignedTxFiles = map (dir </>) signedTxFiles
+  forM_ absSignedTxFiles (readFile >=> print)
+  forM_ absSignedTxFiles doThings
+  where
+    doThings tx =
+      deserialise tx
+        >>= getExUnits cEnv
+        >>= putStrLn . ("ExUnits: " ++) . show
+
+    findSignedTxs path =
+      filter ((".signed" ==) . takeExtension)
+        <$> getDirectoryContents path
+
+deserialise :: FilePath -> IO (CAPI.Tx CAPI.AlonzoEra)
+deserialise txFile = do
+  env <- either (error . show) id <$> CAPI.readTextEnvelopeFromFile txFile
+  return $
+    either
+      (error . show)
+      id
+      (CAPI.deserialiseFromTextEnvelope CAPI.AsAlonzoTx env)
+
+getExUnits cEnv tx = do
+  -- forever (threadDelay 3000000000000000)
+  let txBody = CAPI.getTxBody tx
+  sysStart <- getOrFail <$> Tools.systemStart cEnv
+  eraHist <- getOrFail <$> Tools.eraHistory cEnv
+  pparams <- getOrFail <$> Tools.protocolParams cEnv
+  utxo <- getUtxo txBody
+  return $
+        CAPI.evaluateTransactionExecutionUnits
+          CAPI.AlonzoEraInCardanoMode
+          sysStart
+          eraHist
+          pparams
+          utxo
+          txBody
+  where
+    getUtxo txBody = do
+      let (CAPI.TxBody txbc) = txBody
+          (capiIn : _) = fst <$> CAPI.txIns txbc
+          CAPI.TxIn txid (CAPI.TxIx ix) = capiIn
+
+          oref :: TxOutRef = TxOutRef (fromCardanoTxId txid) (toInteger ix)
+
+      ciTxOut <- getOrFail <$> Tools.getTxOut (chainIndexUrl cEnv) oref
+      putStrLn $ "cix out: " <> show ciTxOut
+
+      let plutusOut = toTxOut ciTxOut
+          datsMap = mkDatums [ciTxOut]
+          capiOut =
+            CAPI.toCtxUTxOTxOut -- here datum will be converted to hash
+              . getOrFail
+              $ toCardanoTxOut Tools.netId datsMap plutusOut
+      putStrLn $ "SEARCH: " ++ show (txOutDatumHash plutusOut >>= flip Map.lookup datsMap)
+      putStrLn $ "PLUTUS out: " ++ show plutusOut
+      putStrLn $ "INDEX out: " ++ show ciTxOut
+      putStrLn $ "DATS map: " ++ show datsMap
+      putStrLn $ "CAPI out: " ++ show capiOut
+      return $
+        CAPI.UTxO $ Map.fromList [(capiIn, capiOut)]
+
+    mkDatums = Map.fromList 
+                . map (\d -> (datumHash d, d)) 
+                . mapMaybe (^? ciTxOutDatum . _Right)
+
+    getOrFail :: Show e => Either e a -> a
+    getOrFail = either (error . show) id
+
+
 
 -- Do all the program setup required for running the local cluster, create a
 -- temporary directory, log output configurations, and pass these to the given

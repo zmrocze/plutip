@@ -6,12 +6,18 @@ module Test.Plutip.Tools.CardanoApi (
   utxosAtAddress,
   queryProtocolParams,
   queryTip,
+  systemStart,
+  protocolParams,
+  eraHistory,
+  outsByInputs,
+  netId,
 ) where
 
 import Cardano.Api qualified as C
 import Cardano.Api.ProtocolParameters (ProtocolParameters)
 import Cardano.Launcher.Node (nodeSocketFile)
 import Cardano.Slotting.Slot (WithOrigin)
+import Cardano.Slotting.Time (SystemStart)
 import Cardano.Wallet.Shelley.Launch.Cluster (RunningNode (RunningNode))
 import Control.Exception (Exception)
 import Data.Set qualified as Set
@@ -49,12 +55,17 @@ queryProtocolParams (runningNode -> rn) =
     info = connectionInfo rn
     query = shellyBasedAlonzoQuery C.QueryProtocolParameters
 
+netId :: C.NetworkId
+netId = C.Mainnet
+
 connectionInfo :: RunningNode -> C.LocalNodeConnectInfo C.CardanoMode
 connectionInfo (RunningNode socket _ _) =
   C.LocalNodeConnectInfo
     (C.CardanoModeParams (C.EpochSlots 21600))
-    C.Mainnet
+    netId
     (nodeSocketFile socket)
+
+conInfo = connectionInfo . runningNode
 
 queryTip :: RunningNode -> IO C.ChainTip
 queryTip = C.getLocalChainTip . connectionInfo
@@ -73,3 +84,41 @@ flattenQueryResult ::
 flattenQueryResult = \case
   Right (Right res) -> Right res
   err -> Left $ SomeError (show err)
+
+-- systemStart :: ClusterEnv -> IO (Either AcquireFailure (WithOrigin C.BlockNo))
+systemStart :: ClusterEnv -> IO (Either AcquireFailure SystemStart)
+systemStart cEnv = do
+  C.queryNodeLocalState
+    (conInfo cEnv)
+    Nothing
+    C.QuerySystemStart
+
+protocolParams :: ClusterEnv -> IO (Either CardanoApiError ProtocolParameters)
+protocolParams cEnv =
+  flattenQueryResult
+    <$> C.queryNodeLocalState
+      (conInfo cEnv)
+      Nothing
+      (shellyBasedAlonzoQuery C.QueryProtocolParameters)
+
+eraHistory :: ClusterEnv -> IO (Either AcquireFailure (C.EraHistory C.CardanoMode))
+eraHistory cEnv =
+  C.queryNodeLocalState
+    (conInfo cEnv)
+    Nothing
+    (C.QueryEraHistory C.CardanoModeIsMultiEra)
+
+outsByInputs :: ClusterEnv -> [C.TxIn] -> IO (Either CardanoApiError (C.UTxO C.AlonzoEra))
+outsByInputs cEnv ins =
+  flattenQueryResult
+    <$> C.queryNodeLocalState
+      (conInfo cEnv)
+      Nothing
+      -- (shellyBasedAlonzoQuery (C.QueryUTxO (C.QueryUTxOByTxIn (Set.fromList ins))))
+      (shellyBasedAlonzoQuery (C.QueryUTxO C.QueryUTxOWhole))
+
+queryLocalState cEnv =
+  C.queryNodeLocalState
+    (conInfo cEnv)
+    Nothing
+    . shellyBasedAlonzoQuery

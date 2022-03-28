@@ -75,6 +75,7 @@ common common-imports
     , typed-process
     , unliftio
     , uuid
+    , lens
 
 common common-language
   default-extensions:
@@ -127,7 +128,8 @@ library
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wredundant-constraints
     -Wmissing-export-lists -Wmissing-deriving-strategies
-    -Wmissing-import-lists -Werror
+    -Wmissing-import-lists 
+    -- -Werror
 
   hs-source-dirs:  src/
   exposed-modules:
@@ -173,6 +175,7 @@ test-suite plutip-tests
   other-modules:
     Spec.Integration
     Spec.Test.Plutip.BotPlutusInterface
+    Spec.SpendScript
 
   default-extensions:
     OverloadedStrings
