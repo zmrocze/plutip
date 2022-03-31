@@ -35,7 +35,7 @@ import Text.Printf (printf)
 test :: TestTree
 test =
   withConfiguredCluster
-    (def {bpiForceBudget = Just (10000000000, 10000000)})
+    (def {bpiForceBudget = Just (178238916, 405242)})
     "Basic integration: launch, add wallet, tx from wallet to wallet"
     [ -- Basic Succeed or Failed tests
       -- assertExecution
@@ -51,7 +51,7 @@ test =
         (initAda 10000000)
         (withContract $ const lockThenSpend)
         [ shouldSucceed
-        , shouldFail
+        -- , shouldFail
         ]
         -- , assertExecution
         --     "Contract 2"

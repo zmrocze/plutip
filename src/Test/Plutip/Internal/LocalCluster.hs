@@ -31,7 +31,7 @@ import Plutus.ChainIndex.Config (ChainIndexConfig (cicNetworkId, cicPort), cicDb
 import Plutus.ChainIndex.Config qualified as ChainIndex
 import Plutus.ChainIndex.Logging (defaultConfig)
 import Servant.Client (BaseUrl (BaseUrl), Scheme (Http))
-import System.Directory (copyFile, findExecutable, getDirectoryContents)
+import System.Directory (copyFile, findExecutable, getDirectoryContents, createDirectory, removePathForcibly)
 import System.Environment (setEnv)
 import System.Exit (die)
 import System.FilePath (takeExtension, (</>))
@@ -59,6 +59,8 @@ import UnliftIO.Exception (catchIO)
 import Control.Monad (forM_)
 import Control.Monad ((>=>))
 import Control.Lens
+import Control.Monad (forever)
+import Control.Concurrent (threadDelay)
 
 -- | Starting a cluster with a setup action
 -- We're heavily depending on cardano-wallet local cluster tooling, however they don't allow the
@@ -129,86 +131,8 @@ withPlutusInterface conf action = do
 
       BotSetup.runSetup cEnv -- run preparations to use `bot-plutus-interface`
       res <- userActon cEnv -- executing user action on cluster
-      try @SomeException (debugTxCheck cEnv) >>= print
+      forever (threadDelay 3000000000000000)
       return res
-
-debugTxCheck :: ClusterEnv -> IO ()
-debugTxCheck cEnv = do
-  let dir = BotSetup.txsDir cEnv
-  signedTxFiles <- findSignedTxs dir
-  putStrLn $ BotSetup.txsDir cEnv
-  putStrLn $ "Signed txs" <> show signedTxFiles
-
-  let absSignedTxFiles = map (dir </>) signedTxFiles
-  forM_ absSignedTxFiles (readFile >=> print)
-  forM_ absSignedTxFiles doThings
-  where
-    doThings tx =
-      deserialise tx
-        >>= getExUnits cEnv
-        >>= putStrLn . ("ExUnits: " ++) . show
-
-    findSignedTxs path =
-      filter ((".signed" ==) . takeExtension)
-        <$> getDirectoryContents path
-
-deserialise :: FilePath -> IO (CAPI.Tx CAPI.AlonzoEra)
-deserialise txFile = do
-  env <- either (error . show) id <$> CAPI.readTextEnvelopeFromFile txFile
-  return $
-    either
-      (error . show)
-      id
-      (CAPI.deserialiseFromTextEnvelope CAPI.AsAlonzoTx env)
-
-getExUnits cEnv tx = do
-  -- forever (threadDelay 3000000000000000)
-  let txBody = CAPI.getTxBody tx
-  sysStart <- getOrFail <$> Tools.systemStart cEnv
-  eraHist <- getOrFail <$> Tools.eraHistory cEnv
-  pparams <- getOrFail <$> Tools.protocolParams cEnv
-  utxo <- getUtxo txBody
-  return $
-        CAPI.evaluateTransactionExecutionUnits
-          CAPI.AlonzoEraInCardanoMode
-          sysStart
-          eraHist
-          pparams
-          utxo
-          txBody
-  where
-    getUtxo txBody = do
-      let (CAPI.TxBody txbc) = txBody
-          (capiIn : _) = fst <$> CAPI.txIns txbc
-          CAPI.TxIn txid (CAPI.TxIx ix) = capiIn
-
-          oref :: TxOutRef = TxOutRef (fromCardanoTxId txid) (toInteger ix)
-
-      ciTxOut <- getOrFail <$> Tools.getTxOut (chainIndexUrl cEnv) oref
-      putStrLn $ "cix out: " <> show ciTxOut
-
-      let plutusOut = toTxOut ciTxOut
-          datsMap = mkDatums [ciTxOut]
-          capiOut =
-            CAPI.toCtxUTxOTxOut -- here datum will be converted to hash
-              . getOrFail
-              $ toCardanoTxOut Tools.netId datsMap plutusOut
-      putStrLn $ "SEARCH: " ++ show (txOutDatumHash plutusOut >>= flip Map.lookup datsMap)
-      putStrLn $ "PLUTUS out: " ++ show plutusOut
-      putStrLn $ "INDEX out: " ++ show ciTxOut
-      putStrLn $ "DATS map: " ++ show datsMap
-      putStrLn $ "CAPI out: " ++ show capiOut
-      return $
-        CAPI.UTxO $ Map.fromList [(capiIn, capiOut)]
-
-    mkDatums = Map.fromList 
-                . map (\d -> (datumHash d, d)) 
-                . mapMaybe (^? ciTxOutDatum . _Right)
-
-    getOrFail :: Show e => Either e a -> a
-    getOrFail = either (error . show) id
-
-
 
 -- Do all the program setup required for running the local cluster, create a
 -- temporary directory, log output configurations, and pass these to the given
@@ -233,7 +157,10 @@ withLocalClusterSetup conf action = do
   withUtf8Encoding $
     -- This temporary directory will contain logs, and all other data
     -- produced by the local test cluster.
-    withSystemTempDir stdoutTextTracer "test-cluster" $ \dir -> do
+    withSystemTempDir stdoutTextTracer "test-cluster" $ \dir' -> do
+      let dir = "/home/mike/dev/mlabs/local-cluster/data"
+      removePathForcibly dir
+      createDirectory dir
       let logOutputs name minSev =
             [ LogToFile (dir </> name) (min minSev Severity.Info)
             , LogToStdStreams minSev
