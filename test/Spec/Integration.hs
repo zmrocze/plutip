@@ -92,9 +92,21 @@ test =
           [ShowTraceButOnlyContext ContractLog $ Debug [AnyLog]]
           "Contract 3"
           (initAda [100])
-          (withContract $ const $ Contract.logInfo @Text "Some contract log with Info level." >> getUtxosThrowsEx)
+          (withContract $ const $ do 
+            Contract.logInfo @Text "Some contract log with Info level." 
+            Contract.logDebug @Text "Some contract log with debug level 2." >> getUtxosThrowsEx)
           [ shouldFail
           , Predicate.not shouldSucceed
+          ]
+      , assertExecutionWith
+          [ShowTraceButOnlyContext ContractLog $ Debug [AnyLog]]
+          "Contract 3"
+          (initAda [100])
+          (withContract $ const $ do 
+            Contract.logInfo @Text "Some contract log with Info level." 
+            Contract.logDebug @Text "Some contract log with debug level 2." >> getUtxosThrowsEx)
+          [ shouldSucceed
+          
           ]
       , assertExecution
           "Pay negative amount"

@@ -128,7 +128,7 @@ module Test.Plutip.Contract (
   ada,
 ) where
 
-import BotPlutusInterface.Types (LogContext, LogLevel, LogsList (getLogsList))
+import BotPlutusInterface.Types (LogContext, LogLevel, LogsList (getLogsList), LogLine (LogLine), sufficientLogLevel)
 import Control.Arrow (left)
 import Control.Monad (void)
 import Control.Monad.Reader (MonadIO (liftIO), MonadReader (ask), ReaderT, runReaderT)
@@ -383,14 +383,14 @@ instance
         render
           . vcat
           . zipWith indexedMsg [0 ..]
-          . map (\(_, _, msg) -> msg)
+          . map pretty
           . filterOrDont
           . getLogsList
       filterOrDont = case option of
         DisplayAllTrace ->
           id -- don't
         DisplayOnlyFromContext logCtx logLvl ->
-          filter (\(ctx, lvl, _) -> ctx == logCtx && logLvl >= lvl)
+          filter (\(LogLine ctx lvl _) -> ctx == logCtx && sufficientLogLevel logLvl lvl)
 
       indexedMsg :: Int -> Doc ann -> Doc ann
       indexedMsg i msg = pretty i <> pretty ("." :: String) <+> msg

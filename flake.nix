@@ -11,7 +11,7 @@
       flake = false;
     };
     bot-plutus-interface.url =
-      "github:mlabs-haskell/bot-plutus-interface?rev=afbafe3f8b3db70303441e6e0d91fb93e4f47001";
+      "github:mlabs-haskell/bot-plutus-interface?rev=18e2f90c087da95719c878d3f98a4996990c0f16";
   };
 
   outputs =
