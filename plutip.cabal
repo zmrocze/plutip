@@ -227,6 +227,7 @@ executable plutip-server
     , wai-cors
     , wai-logger
     , warp
+    , random
 
   other-modules:
     Api

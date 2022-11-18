@@ -19,6 +19,8 @@ import Data.Text.Encoding qualified as Text
 import Data.Traversable (for)
 import System.Directory (doesFileExist)
 import System.FilePath (replaceFileName)
+import System.Random (randomRIO)
+import Control.Concurrent (threadDelay)
 import Test.Plutip.Config (chainIndexPort, relayNodeLogs)
 import Test.Plutip.Internal.BotPlutusInterface.Setup (keysDir)
 import Test.Plutip.Internal.BotPlutusInterface.Wallet (BpiWallet (signKey), addSomeWallet)
@@ -99,6 +101,10 @@ stopClusterHandler :: StopClusterRequest -> AppM StopClusterResponse
 stopClusterHandler StopClusterRequest = do
   statusMVar <- asks status
   isClusterDown <- liftIO $ isEmptyMVar statusMVar
+  liftIO $ do 
+    x :: Float <- randomRIO (0, 1)
+    threadDelay (round $ 500 * x) 
+
   if isClusterDown
     then pure $ StopClusterFailure "Cluster is not running"
     else do
