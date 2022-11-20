@@ -67,6 +67,7 @@ import Types (
   StopClusterRequest (StopClusterRequest),
   StopClusterResponse (StopClusterFailure, StopClusterSuccess),
  )
+import System.IO (hPutStrLn, stderr)
 
 startClusterHandler :: ServerOptions -> StartClusterRequest -> AppM StartClusterResponse
 startClusterHandler
@@ -79,7 +80,7 @@ startClusterHandler
           throwError NegativeLovelaces
     statusMVar <- asks status
     isClusterDown <- liftIO $ isEmptyMVar statusMVar
-    liftIO $ putStrLn $ "cluster is:" <> show isClusterDown <> " and we want to start it"
+    stdErrLog $ "cluster is:" <> show isClusterDown <> " and we want to start it"
     unless isClusterDown $ throwError ClusterIsRunningAlready
     let extraConf = ExtraConfig slotLength epochSize
         cfg = def {relayNodeLogs = nodeLogs, chainIndexMode = NotNeeded, extraConfig = extraConf}
@@ -127,10 +128,15 @@ stopClusterHandler StopClusterRequest = do
   isClusterDown <- liftIO $ isEmptyMVar statusMVar
   if isClusterDown
     then do 
-      liftIO $ putStrLn "cluster is not running"
+      stdErrLog "cluster is not running, no stop"
       pure $ StopClusterFailure "Cluster is not running"
     else do
-      liftIO $ putStrLn "cluster is running and we try stop"
+      stdErrLog "cluster is running and we try stop"
       statusTVar <- liftIO $ takeMVar statusMVar
       liftIO $ stopCluster statusTVar
       pure StopClusterSuccess
+
+
+-- stdErrLog :: String -> IO 
+stdErrLog str = liftIO $
+  hPutStrLn stderr str
