@@ -26,7 +26,7 @@ import Test.Plutip.Internal.BotPlutusInterface.Wallet (BpiWallet (signKey), addS
 import Test.Plutip.Internal.LocalCluster (startCluster, stopCluster)
 import Test.Plutip.Internal.Types (ClusterEnv (runningNode))
 import Test.Plutip.LocalCluster (cardanoMainnetAddress)
-import Test.Plutip.Tools.CardanoApi (awaitWalletFunded)
+import Test.Plutip.Tools.CardanoApi (awaitWalletFunded, printErr)
 import Types (
   AppM,
   ClusterStartupFailureReason (
@@ -54,6 +54,7 @@ import Types (
   StopClusterRequest (StopClusterRequest),
   StopClusterResponse (StopClusterFailure, StopClusterSuccess),
  )
+import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
 startClusterHandler :: ServerOptions -> StartClusterRequest -> AppM StartClusterResponse
 startClusterHandler
@@ -91,11 +92,18 @@ startClusterHandler
         env <- ask
         return (env, wallets)
 
+      timed a = do
+        time0 <- liftIO getCurrentTime
+        res <- a
+        time1 <- liftIO getCurrentTime
+        liftIO $ printErr $ diffUTCTime time1 time0
+        return res
+
       -- wait for confirmation of funding txs, throw the first error if there's any
       waitForFundingTxs clusterEnv wallets =
         ExceptT . liftIO . fmap (left WaitingForFundedWalletsFailed . sequence_) $
           for wallets $ \w ->
-            awaitWalletFunded clusterEnv (cardanoMainnetAddress w)
+            timed $ awaitWalletFunded clusterEnv (cardanoMainnetAddress w)
 
       getNodeSocketFile (runningNode -> RunningNode conn _ _ _) = nodeSocketFile conn
       getNodeConfigFile =

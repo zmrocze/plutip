@@ -5,6 +5,7 @@ module Test.Plutip.Tools.CardanoApi (
   queryProtocolParams,
   queryTip,
   awaitWalletFunded,
+  printErr,
 ) where
 
 import Cardano.Api qualified as C
@@ -24,6 +25,7 @@ import GHC.Generics (Generic)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (EraMismatch)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Test.Plutip.Internal.Types (ClusterEnv (runningNode))
+import System.IO (stderr, hPrint)
 
 newtype CardanoApiError
   = SomeError String
@@ -79,6 +81,9 @@ flattenQueryResult = \case
   Right (Right res) -> Right res
   err -> Left $ SomeError (show err)
 
+printErr :: Show a => a -> IO ()
+printErr = hPrint stderr
+
 -- | Waits till specified address is funded using cardano-node query.
 -- Performs 20 tries with 0.2 seconds between tries, which should be a sane default.
 -- Waits till there's any utxos at an address - works for us as funds will be send with tx per address.
@@ -86,7 +91,9 @@ awaitWalletFunded ::
   ClusterEnv ->
   C.AddressAny ->
   IO (Either Text ())
-awaitWalletFunded cenv addr = toErrorMsg <$> retrying policy checkResponse action
+awaitWalletFunded cenv addr = do
+  print $ "Awaits address " <> show addr
+  toErrorMsg <$> retrying policy checkResponse action
   where
     -- With current defaults the slot length is 0.2s and block gets produced about every second slot.
     -- We are expected to wait 0.4s, waiting 4s we are almost guaranteed (p>0.9999)
@@ -95,7 +102,10 @@ awaitWalletFunded cenv addr = toErrorMsg <$> retrying policy checkResponse actio
 
     action _ = right (M.null . C.unUTxO) <$> utxosAtAddress cenv addr
 
-    checkResponse _ = return . fromRight False
+    checkResponse _ x = do
+      let will = fromRight False $ x
+      printErr $ "Got x=" <> show x <> "and " <> (if will then "will" else "won't") <> "retry"
+      return will
 
     toErrorMsg = \case
       Left (SomeError e) -> Left $ T.pack e

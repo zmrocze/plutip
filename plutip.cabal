@@ -69,6 +69,7 @@ common common-imports
     , retry
     , row-types
     , servant-client
+    , time
     , stm
     , tagged
     , tasty
@@ -227,6 +228,7 @@ executable plutip-server
     , wai-cors
     , wai-logger
     , warp
+    , time
 
   other-modules:
     Api
@@ -244,5 +246,6 @@ executable local-cluster
     , optparse-applicative
     , plutip
     , positive
+    , time
 
   ghc-options:   -Wall -threaded -rtsopts

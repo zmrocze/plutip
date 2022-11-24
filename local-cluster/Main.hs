@@ -6,9 +6,9 @@
 module Main (main) where
 
 import Control.Applicative (optional, (<**>))
-import Control.Monad (forM_, replicateM, void)
+import Control.Monad (forM_, replicateM, void, replicateM_)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ReaderT (ReaderT))
+import Control.Monad.Reader (ReaderT (ReaderT), MonadReader (ask))
 import Data.Default (def)
 import Numeric.Positive (Positive)
 import Options.Applicative (Parser, helper, info)
@@ -23,9 +23,14 @@ import Test.Plutip.LocalCluster
   ( mkMainnetAddress,
     startCluster,
     stopCluster,
-    waitSeconds,
+    waitSeconds, cardanoMainnetAddress
   )
+import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import GHC.Natural (Natural)
+import Control.Concurrent (threadDelay)
+import Test.Plutip.Tools.CardanoApi (utxosAtAddress, awaitWalletFunded)
+import Data.Foldable (for_)
+import Data.Traversable (for)
 
 main :: IO ()
 main = do
@@ -37,14 +42,34 @@ main = do
           workingDir = maybe Temporary (`Fixed` False) workDir
           plutipConfig = def {clusterWorkingDir = workingDir}
 
-      (st, _) <- startCluster plutipConfig $ do
+      (st, (wallets, cenv)) <- startCluster plutipConfig $ do
+        cenv <- ask
         ws <- initWallets numWallets numUtxos amt dirWallets
-        waitSeconds 2 -- let wallet Tx finish, it can take more time with bigger slot length
 
-        separate
-        liftIO $ forM_ (zip ws [(1 :: Int) ..]) printWallet
-        printNodeRelatedInfo
-        separate
+        -- liftIO $ replicateM_ 20 (do
+        --   for_ ws $ \w -> do
+        --     let addr = cardanoMainnetAddress w
+        --     utxosAtAddress cenv addr >>= print
+        --   )
+          
+        -- waitSeconds 2 -- let wallet Tx finish, it can take more time with bigger slot length
+
+        -- separate
+        -- liftIO $ forM_ (zip ws [(1 :: Int) ..]) printWallet
+        -- printNodeRelatedInfo
+        -- separate
+        return (ws, cenv)
+      
+      time0 <- getCurrentTime
+      print $ map cardanoMainnetAddress wallets 
+      time1 <- getCurrentTime
+      print $ diffUTCTime time1 time0
+      
+      time0 <- getCurrentTime
+      waitForFundingTxs cenv wallets >>= print 
+      time1 <- getCurrentTime
+
+      print $ diffUTCTime time1 time0
 
       putStrLn "Cluster is running. Press Enter to stop."
         >> void getLine
@@ -55,7 +80,10 @@ main = do
     printNodeRelatedInfo = ReaderT $ \cEnv -> do
       putStrLn $ "Node socket: " <> show (nodeSocket cEnv)
 
-    separate = liftIO $ putStrLn "\n------------\n"
+    -- separate = liftIO $ putStrLn "\n------------\n"
+    waitForFundingTxs clusterEnv wallets =
+      for wallets $ \w ->
+            awaitWalletFunded clusterEnv (cardanoMainnetAddress w)
 
     totalAmount :: CWalletConfig -> Either String Positive
     totalAmount cwc =
@@ -81,7 +109,7 @@ pnumWallets =
         <> Options.long "wallets"
         <> Options.short 'n'
         <> Options.metavar "NUM_WALLETS"
-        <> Options.value 1
+        <> Options.value 100
     )
 
 pdirWallets :: Parser (Maybe FilePath)
@@ -121,7 +149,7 @@ pnumUtxos =
     ( Options.long "utxos"
         <> Options.short 'u'
         <> Options.metavar "NUM_UTXOS"
-        <> Options.value 1
+        <> Options.value 10
     )
 
 pWorkDir :: Parser (Maybe FilePath)
