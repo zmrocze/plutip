@@ -97,8 +97,8 @@ awaitWalletFunded cenv addr = do
   where
     -- With current defaults the slot length is 0.2s and block gets produced about every second slot.
     -- We are expected to wait 0.4s, waiting 4s we are almost guaranteed (p>0.9999)
-    delay = 200_000 -- in microseconds, 0.2s.
-    policy = constantDelay delay <> limitRetries 20
+    delay = 400_000 -- in microseconds, 0.2s.
+    policy = constantDelay delay <> limitRetries 60
 
     action _ = right (M.null . C.unUTxO) <$> utxosAtAddress cenv addr
 
