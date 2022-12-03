@@ -93,6 +93,7 @@ common common-imports
     , unliftio-core
     , uuid
     , yaml
+    , serialise
 
 common common-language
   default-extensions:
