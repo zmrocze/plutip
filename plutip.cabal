@@ -94,6 +94,9 @@ common common-imports
     , uuid
     , yaml
     , serialise
+    , word8
+    , binary
+    , flat
 
 common common-language
   default-extensions:
