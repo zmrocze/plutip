@@ -24,6 +24,12 @@ import Cardano.Api (BlockHeader, PlutusScriptV1, deserialiseFromTextEnvelope, Te
 import Data.Data (Proxy(Proxy))
 import Control.Exception (throwIO)
 import System.Exit (die)
+import ExampleScriptContext (contextData)
+import PlutusPrelude (Pretty(..))
+import Data.Text.Prettyprint.Doc (layoutPretty)
+import Prettyprinter (defaultLayoutOptions)
+import Prettyprinter.Render.String (renderString)
+import Text.Show.Pretty (pPrint)
 showHex :: ByteString -> String
 showHex = show . LedgerBytes . toBuiltin
 -- Awlayssucceeds v1
@@ -202,7 +208,7 @@ loadScript lang fp = do
   pure script
 
 main = do 
-  print $ showHex $ toStrict $ serialise $ fst $ paramss !! 2
+  pPrint contextData
 
 mainMut = do
 
