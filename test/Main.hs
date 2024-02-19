@@ -19,12 +19,13 @@ import Control.Arrow ((>>>), Arrow ((***)))
 import qualified UntypedPlutusCore as UPLC
 import qualified PlutusCore as PLC
 import qualified Flat
+import qualified Cardano.Api as Capi
 import Data.Int (Int64, Int32, Int16)
 import Cardano.Api (BlockHeader, PlutusScriptV1, deserialiseFromTextEnvelope, TextEnvelope (TextEnvelope), HasTypeProxy (proxyToAsType), readFileTextEnvelope, PlutusScript, SerialiseAsRawBytes (serialiseToRawBytes, deserialiseFromRawBytes), PlutusScriptV2, HasTextEnvelope (textEnvelopeDefaultDescr), writeFileTextEnvelope)
 import Data.Data (Proxy(Proxy))
 import Control.Exception (throwIO)
 import System.Exit (die)
-import ExampleScriptContext (contextData)
+import ExampleScriptContext (contextV1Data, contextV2Data)
 import PlutusPrelude (Pretty(..))
 import Data.Text.Prettyprint.Doc (layoutPretty)
 import Prettyprinter (defaultLayoutOptions)
@@ -207,8 +208,27 @@ loadScript lang fp = do
   print $ unScript script
   pure script
 
-main = do 
-  pPrint contextData
+main = do
+  -- pPrint contextV1Data
+  -- pPrint contextV2Data
+  sKey <- Capi.generateSigningKey Capi.AsPaymentKey
+  let vKey = Capi.getVerificationKey sKey
+  let h = Capi.verificationKeyHash vKey
+  print h
+  print $ Capi.serialiseToCBOR h 
+  print $ Capi.serialiseToCBOR h 
+  print $ showHex $ Capi.serialiseToCBOR h
+  print $ Capi.serialiseToRawBytes h 
+  print $ showHex $ Capi.serialiseToRawBytes h 
+  print $ Capi.serialiseToRawBytesHex h 
+  print "hey"
+  print $ Capi.serialiseToCBOR sKey 
+  print $ Capi.serialiseToCBOR sKey 
+  print $ showHex $ Capi.serialiseToCBOR sKey
+  print $ Capi.serialiseToRawBytes sKey
+  print $ showHex $ Capi.serialiseToRawBytes sKey
+  print $ Capi.serialiseToRawBytesHex sKey
+
 
 mainMut = do
 
